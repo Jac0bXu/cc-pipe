@@ -2,9 +2,9 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Vision
+## Project
 
-cc-pipe is a pipe operator for Claude Code skills — bringing Unix-style `skill1 | skill2 | skill3` composition to the skill system. The output of one skill becomes the input/arguments of the next, enabling composable pipelines without manual orchestration. Primary usage is through the `/pipe` skill for LLM-driven orchestration.
+cc-pipe is a pipe operator for Claude Code skills. It provides a DSL for chaining skills where each skill's output becomes the next skill's input, with support for parallel branches, conditional routing, and error recovery. Primary interface is the `/pipe` skill for LLM-driven orchestration.
 
 ## Commands
 
@@ -16,10 +16,7 @@ npm run test:watch  # Run tests in watch mode
 npm run lint        # Type-check with tsc --noEmit
 ```
 
-Running a single test file:
-```bash
-npx vitest run tests/parser/parser.test.ts
-```
+Single test file: `npx vitest run tests/parser/parser.test.ts`
 
 ## Architecture
 
@@ -55,38 +52,8 @@ src/
 
 **Key flow**: CLI or /pipe skill → parse DSL → resolve skills → execute (sequential/parallel/conditional) via `claude --print` → pipe text output between steps → track metadata in JSON side-channel → persist to `.cc-pipe/`.
 
-**Two execution modes**: (1) In-session: Claude invokes skills directly via Skill tool for simple linear pipelines. (2) Subprocess: spawns `claude --print` per step for parallel branches, conditional routing, and long pipelines. The `/pipe` skill's SKILL.md tells Claude which mode to use.
+**Two execution modes**: (1) In-session: Claude invokes skills directly via Skill tool for simple linear pipelines. (2) Subprocess: spawns `claude --print` per step for parallel branches, conditional routing, and long pipelines.
 
-**Skill invocation**: Each step runs `claude --print --output-format json` with a prompt that references the skill name. If the skill has a SKILL.md, Claude uses it; otherwise the name is treated as a raw prompt instruction.
+**Skill invocation**: Each subprocess step runs `claude --print --output-format json` with a prompt referencing the skill name. If the skill has a SKILL.md, Claude uses it; otherwise the name is treated as a raw prompt instruction.
 
-## DSL Syntax
-
-```
-# Linear
-skill1 | skill2 | skill3
-
-# With error recovery flags
-skill1 --retry 3 --fallback cleanup | skill2 --on-error skip
-
-# Parallel fan-out/fan-in
-skill1 | [skill2 & skill3] --merge json-array | skill4
-
-# Conditional routing
-skill1 | ?{contains 'error'} > error-handler : normal-handler
-
-# Mixed
-fetch | [translate & summarize] | ?{contains 'error'} > handle-error : format
-```
-
-### Condition types
-- `contains 'text'` — substring match
-- `matches '/regex/'` — regex test
-- `equals 'exact'` — exact string match (trimmed)
-- `exit-code N` — check previous step's exit code
-- `json-path '$.field equals "value"'` — JSON field comparison
-
-### Merge strategies
-- `concat` (default) — join with `\n\n---\n\n` separator
-- `json-array` — wrap in JSON array
-- `first` — take first result only
-- `last` — take last result only
+**Adding new DSL features**: Extend `ast-types.ts` with new node types, add tokens to `pipeline-lexer.ts`, add grammar rules to `pipeline-parser.ts`, then add execution logic to `pipeline-runner.ts`. Tests go in `tests/parser/` and `tests/engine/`.
